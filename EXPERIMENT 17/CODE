@@ -1,0 +1,73 @@
+#include <Arduino.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define BLOCKS 4
+#define BLOCK_SIZE 32
+
+uint32_t memoryPool[BLOCKS][BLOCK_SIZE / 4];
+bool used[BLOCKS] = {false, false, false, false};
+
+void* allocateBlock()
+{
+  for (int i = 0; i < BLOCKS; i++)
+  {
+    if (!used[i])
+    {
+      used[i] = true;
+      return memoryPool[i];
+    }
+  }
+  return NULL;
+}
+
+void releaseBlock(void *ptr)
+{
+  for (int i = 0; i < BLOCKS; i++)
+  {
+    if (ptr == memoryPool[i])
+      used[i] = false;
+  }
+}
+
+void MemoryTask(void *parameter)
+{
+  Serial.println("\n--- HEAP MEMORY ---");
+
+  size_t before = ESP.getFreeHeap();
+  int *data = (int *)pvPortMalloc(10 * sizeof(int));
+
+  if (data != NULL)
+  {
+    size_t after = ESP.getFreeHeap();
+
+    Serial.print("Heap before : ");
+    Serial.println(before);
+
+    Serial.print("Heap after  : ");
+    Serial.println(after);
+
+    Serial.print("Heap reduction : ");
+    Serial.println(before - after);
+
+    vPortFree(data);
+
+    Serial.print("Heap after release : ");
+    Serial.println(ESP.getFreeHeap());
+  }
+
+  Serial.println("\n--- STACK HIGH-WATER MARK ---");
+
+  UBaseType_t stack = uxTaskGetStackHighWaterMark(NULL);
+
+  Serial.print("Minimum remaining stack : ");
+  Serial.println(stack);
+
+  Serial.println("\n--- MEMORY POOL ---");
+  Serial.println("Pool size : 128 bytes");
+
+  void *blocks[5];
+
+  for (int i = 0; i < 5; i++)
+  {
+    blocks[i] = allocateBlock();
